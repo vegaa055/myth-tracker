@@ -112,6 +112,8 @@ p {
 .data-source strong { color: var(--text-dim); font-weight: 500; }
 .data-source.live { border-color: #2d5a4a; }
 .data-source.live strong { color: #34d399; }
+a.data-source:hover { border-color: var(--border); text-decoration: none; }
+a.data-source:hover strong { color: var(--text); }
 
 .page {
   max-width: 1180px;

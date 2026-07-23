@@ -189,6 +189,45 @@ inactivity and must be resumed from the console before they accept
 connections. A paused database is not an error in the app — the site falls
 back to bundled data until it wakes.
 
+#### Troubleshooting: the deployed site says `bundled (Neo4j offline)`
+
+The site works, but it is serving the built-in dataset because it cannot
+reach Aura. Visit **`/api/health`** on the deployed URL (or click the badge
+in the header) for the exact reason. It reports no secrets — the password
+appears only as set/unset plus length, and the host is partially masked:
+
+```json
+{
+  "status": "degraded",
+  "servingDataFrom": "bundled",
+  "reason": "authentication failed — NEO4J_PASSWORD is wrong for this database",
+  "neo4j": { "reachable": false, "latencyMs": 512, "code": "..." },
+  "config": { "env": { "NEO4J_URI": true, "NEO4J_PASSWORD": false } },
+  "hints": ["..."]
+}
+```
+
+Read `config.env` first — those booleans say whether each variable exists
+in the running deployment at all. Common causes, in order:
+
+1. **Variables added but not redeployed.** Vercel injects environment
+   variables at *build* time; an existing deployment never picks up new
+   ones. Fix: Deployments → ⋯ → **Redeploy**.
+2. **Wrong environment scope.** A variable ticked only for *Development*
+   or *Preview* is absent in Production. Tick **Production** and redeploy.
+3. **Aura instance paused.** Free instances pause after inactivity.
+   Resume it in the console; `code` will read `ServiceUnavailable`.
+4. **Database never seeded.** If `neo4j.reachable` is `true` but data is
+   still bundled, the database is empty — run `npm run seed:aura`.
+5. **Password mismatch.** `code` reads
+   `Neo.ClientError.Security.Unauthorized`.
+
+Server-side failures are also logged (`vercel logs <url>`), prefixed
+`[myth-tracker] Neo4j unavailable:`.
+
+Delete `app/api/health/route.ts` once the deployment is settled if you
+would rather not expose diagnostics.
+
 ### Option B — AWS single VM + Docker Compose (~$12–24/mo, all-AWS)
 
 The repo ships a production `Dockerfile` and `docker-compose.yml` (app +

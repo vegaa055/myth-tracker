@@ -114,4 +114,6 @@ export interface Dataset {
   motifs: Motif[];
   cultures: Culture[];
   source: "neo4j" | "bundled";
+  /** When source is "bundled", why the database was not used. */
+  note?: string;
 }

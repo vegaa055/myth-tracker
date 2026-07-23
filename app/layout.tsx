@@ -29,7 +29,7 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { source } = await getDataset();
+  const { source, note } = await getDataset();
   return (
     <html lang="en">
       <body className={`${display.variable} ${body.variable}`}>
@@ -42,9 +42,17 @@ export default async function RootLayout({
             <Link href="/explore">Explore Map</Link>
             <Link href="/methodology">Methodology</Link>
           </nav>
-          <span className={`data-source ${source === "neo4j" ? "live" : ""}`}>
+          <a
+            href="/api/health"
+            className={`data-source ${source === "neo4j" ? "live" : ""}`}
+            title={
+              source === "neo4j"
+                ? "Serving live data from the Neo4j graph. Click for connection details."
+                : `Neo4j unavailable: ${note ?? "unknown reason"} — click for full diagnostics.`
+            }
+          >
             data: <strong>{source === "neo4j" ? "Neo4j graph" : "bundled (Neo4j offline)"}</strong>
-          </span>
+          </a>
         </header>
         {children}
       </body>

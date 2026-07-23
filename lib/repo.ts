@@ -6,7 +6,7 @@ import type {
   MotifRole,
   Variant,
 } from "./types";
-import { getDriver, neo4jAvailable } from "./neo4j";
+import { getDriver, describeNeo4jError } from "./neo4j";
 import { motifs as bundledMotifs } from "@/data/motifs";
 import { cultures as bundledCultures } from "@/data/cultures";
 import { myths as bundledMyths, variants as bundledVariants } from "@/data/myths";
@@ -24,33 +24,35 @@ const CACHE_MS = 15_000;
 export async function getDataset(): Promise<Dataset> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.data;
 
+  // Query directly rather than probing first: a separate verifyConnectivity()
+  // round trip doubled cold-start latency on serverless for no extra safety.
   let data: Dataset;
-  if (await neo4jAvailable()) {
-    try {
-      data = await loadFromNeo4j();
-    } catch {
-      data = bundledDataset();
+  try {
+    data = await loadFromNeo4j();
+    // Reachable but empty means it was never seeded.
+    if (data.variants.length === 0) {
+      data = bundledDataset(
+        "connected, but the database is empty — run `npm run seed:aura`"
+      );
     }
-  } else {
-    data = bundledDataset();
-  }
-
-  // If the database is reachable but empty (not yet seeded), fall back.
-  if (data.source === "neo4j" && data.variants.length === 0) {
-    data = bundledDataset();
+  } catch (err) {
+    data = bundledDataset(describeNeo4jError(err));
+    // Surfaces in `vercel logs` / the local terminal instead of vanishing.
+    console.error(`[myth-tracker] Neo4j unavailable: ${data.note}`);
   }
 
   cache = { data, at: Date.now() };
   return data;
 }
 
-function bundledDataset(): Dataset {
+function bundledDataset(note?: string): Dataset {
   return {
     myths: bundledMyths,
     variants: bundledVariants,
     motifs: bundledMotifs,
     cultures: bundledCultures,
     source: "bundled",
+    note,
   };
 }
 
