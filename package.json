@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "seed:aura": "tsx scripts/seed.ts --env-file=.env.aura"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

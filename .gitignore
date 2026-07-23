@@ -6,5 +6,6 @@ build/
 next-env.d.ts
 .env.local
 .env*.local
+.env.aura
 npm-debug.log*
 .DS_Store

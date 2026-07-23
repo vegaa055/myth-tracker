@@ -5,9 +5,16 @@ import neo4j, { Driver } from "neo4j-driver";
  * instance on globalThis in development.
  */
 
-const URI = process.env.NEO4J_URI ?? "bolt://localhost:7687";
-const USER = process.env.NEO4J_USER ?? "neo4j";
-const PASSWORD = process.env.NEO4J_PASSWORD ?? "mythtracker";
+/** Trim stray whitespace/quotes from copy-pasted credentials. */
+function clean(v: string | undefined): string | undefined {
+  return v?.trim().replace(/^["'](.*)["']$/s, "$1");
+}
+
+const URI = clean(process.env.NEO4J_URI) ?? "bolt://localhost:7687";
+// Aura's downloaded credentials file names this NEO4J_USERNAME; accept either.
+const USER =
+  clean(process.env.NEO4J_USER) ?? clean(process.env.NEO4J_USERNAME) ?? "neo4j";
+const PASSWORD = clean(process.env.NEO4J_PASSWORD) ?? "mythtracker";
 
 const globalForNeo4j = globalThis as unknown as { __neo4jDriver?: Driver };
 

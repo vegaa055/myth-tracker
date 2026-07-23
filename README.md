@@ -128,15 +128,66 @@ unreachable it serves the bundled dataset instead of erroring.
 
 ### Option A — Vercel + AuraDB Free ($0/mo, simplest)
 
-1. Create a free database at <https://console.neo4j.io> → note the
-   `neo4j+s://xxxx.databases.neo4j.io` URI and generated password.
-2. Seed it from your machine (PowerShell):
-   ```powershell
-   $env:NEO4J_URI="neo4j+s://xxxx.databases.neo4j.io"; $env:NEO4J_PASSWORD="<aura-password>"; npm run seed
-   ```
-3. Push the repo to GitHub, import it at <https://vercel.com/new>, and set
-   the three `NEO4J_*` environment variables in the project settings.
-   Every push deploys automatically.
+**1. Create the database.** At <https://console.neo4j.io>, create a free
+instance. It downloads a credentials `.txt` file — keep it; the password is
+shown **once**.
+
+**2. Seed it.** Don't fight shell quoting — put the credentials in a file:
+
+```bash
+cp .env.aura.example .env.aura
+```
+
+Open `.env.aura` and paste the contents of Aura's downloaded credentials
+file over it. The `AURA_*` lines are ignored, and `NEO4J_USERNAME` is
+accepted as well as `NEO4J_USER`. Then, from the project folder:
+
+```bash
+npm run seed:aura
+```
+
+`.env.aura` is gitignored, so credentials never reach the repo.
+
+The seeder prints every setting and **where each came from** before
+connecting, e.g.:
+
+```
+Connection settings
+  env file       .env.aura
+  NEO4J_URI      neo4j+s://abc12345.databases.neo4j.io   [.env.aura]
+  NEO4J_USER     neo4j   [.env.aura]
+  NEO4J_PASSWORD ******************** (43 chars)   [.env.aura]
+```
+
+All three should read `[.env.aura]`. If the URI and password come from
+different sources you get an explicit warning — that mismatch (Aura URI,
+local password) is the usual cause of
+`The client is unauthorized due to authentication failure`.
+
+**3. Deploy.** Push to GitHub, import the repo at
+<https://vercel.com/new>, and add three environment variables under
+Settings → Environment Variables:
+
+| Name | Value |
+| --- | --- |
+| `NEO4J_URI` | `neo4j+s://xxxxxxxx.databases.neo4j.io` |
+| `NEO4J_USER` | `neo4j` |
+| `NEO4J_PASSWORD` | the Aura password |
+
+Vercel builds and deploys on every push. If the vars are wrong the site
+still comes up — it serves the bundled dataset and the header badge reads
+`data: bundled (Neo4j offline)`, which is your signal to check them.
+
+**Shell note (Windows).** `$env:VAR="..."` is **PowerShell** syntax. In
+**cmd.exe** it fails with `The filename, directory name, or volume label
+syntax is incorrect` because of the `://` in the URI. VS Code's terminal
+may be either — check the dropdown, or just use `.env.aura` as above and
+avoid the issue entirely.
+
+**Aura free tier.** Instances pause automatically after a period of
+inactivity and must be resumed from the console before they accept
+connections. A paused database is not an error in the app — the site falls
+back to bundled data until it wakes.
 
 ### Option B — AWS single VM + Docker Compose (~$12–24/mo, all-AWS)
 
@@ -167,9 +218,18 @@ than option B's whole VM.
 
 ### Seeding note
 
-`npm run seed` is a one-shot load — run it from any machine that can
-reach the database whenever `data/*.ts` changes. Aura connections use the
-`neo4j+s://` scheme (TLS); no code changes needed, the driver handles it.
+Seeding is a one-shot load — run it from any machine that can reach the
+database whenever `data/*.ts` changes:
+
+| Command | Reads | Target |
+| --- | --- | --- |
+| `npm run seed` | `.env.local` | local Docker Neo4j |
+| `npm run seed:aura` | `.env.aura` | Neo4j AuraDB |
+| `npx tsx scripts/seed.ts --env-file=<path>` | your file | anything |
+
+Shell environment variables override the file (the report shows which
+won). Aura connections use `neo4j+s://` for TLS — the driver handles it,
+no code changes needed.
 
 ## Extending the dataset
 
