@@ -266,9 +266,20 @@ database whenever `data/*.ts` changes:
 | `npm run seed:aura` | `.env.aura` | Neo4j AuraDB |
 | `npx tsx scripts/seed.ts --env-file=<path>` | your file | anything |
 
-Shell environment variables override the file (the report shows which
-won). Aura connections use `neo4j+s://` for TLS — the driver handles it,
-no code changes needed.
+**Precedence.** An explicitly requested file (`seed:aura`, or any
+`--env-file=`) overrides shell variables — asking for a file means "use
+these credentials". The default `.env.local` follows the usual convention
+and lets shell variables win. Either way the report names the source of
+every value, and warns when a stale `$env:` variable is shadowing the file:
+
+```
+WARNING: shell variable(s) NEO4J_URI, NEO4J_PASSWORD override .env.local.
+Editing that file will NOT change these values. Clear them with:
+  PowerShell:  Remove-Item Env:\NEO4J_URI; Remove-Item Env:\NEO4J_PASSWORD
+```
+
+Aura connections use `neo4j+s://` for TLS — the driver handles it, no code
+changes needed.
 
 ## Extending the dataset
 

@@ -23,22 +23,43 @@ import { existsSync } from "node:fs";
 import { config } from "dotenv";
 
 const args = process.argv.slice(2);
-const envFile =
-  args.find((a) => a.startsWith("--env-file="))?.split("=").slice(1).join("=") ??
-  ".env.local";
+const explicitEnvFile = args
+  .find((a) => a.startsWith("--env-file="))
+  ?.split("=")
+  .slice(1)
+  .join("=");
+const envFile = explicitEnvFile ?? ".env.local";
 
-// Record which vars the shell already supplied, so we can report the source
-// of each value. dotenv does not override existing vars: shell wins.
 const TRACKED = [
   "NEO4J_URI",
   "NEO4J_USER",
   "NEO4J_USERNAME",
   "NEO4J_PASSWORD",
 ] as const;
-const fromShell = new Set(TRACKED.filter((k) => process.env[k] !== undefined));
 
+// Snapshot what the shell supplied before loading the file, so every value's
+// origin can be reported. Stale `$env:` variables left over from a previous
+// attempt silently outranking the file is a genuinely confusing failure.
+const shellValues: Partial<Record<(typeof TRACKED)[number], string>> = {};
+for (const k of TRACKED) {
+  if (process.env[k] !== undefined) shellValues[k] = process.env[k];
+}
+
+// An explicitly requested file wins over the ambient shell — asking for
+// `--env-file=.env.aura` means "use these credentials". The default
+// `.env.local` keeps the usual convention of shell-overrides-file.
+const overrideShell = explicitEnvFile !== undefined;
 const envFileFound = existsSync(envFile);
-if (envFileFound) config({ path: envFile, quiet: true });
+if (envFileFound) config({ path: envFile, quiet: true, override: overrideShell });
+
+/** Shell vars that were set but replaced by the explicitly-requested file. */
+const overridden = TRACKED.filter(
+  (k) => shellValues[k] !== undefined && process.env[k] !== shellValues[k]
+);
+/** Shell vars still winning (only possible with the default env file). */
+const shellStillWinning = TRACKED.filter(
+  (k) => shellValues[k] !== undefined && process.env[k] === shellValues[k]
+);
 
 import neo4j, { Neo4jError } from "neo4j-driver";
 import { motifs, motifIndex } from "../data/motifs";
@@ -54,8 +75,13 @@ function clean(v: string | undefined): string | undefined {
 
 function sourceOf(...keys: (typeof TRACKED)[number][]): string {
   for (const k of keys) {
-    if (fromShell.has(k)) return "shell";
-    if (process.env[k] !== undefined) return envFile;
+    const current = process.env[k];
+    if (current === undefined) continue;
+    // Still identical to what the shell had ⇒ the shell value is in force.
+    if (shellValues[k] !== undefined && current === shellValues[k]) {
+      return "shell";
+    }
+    return envFile;
   }
   return "built-in default";
 }
@@ -87,6 +113,30 @@ function reportConfig() {
   );
   if (rawPassword !== undefined && rawPassword !== PASSWORD) {
     console.log("  note: surrounding whitespace/quotes trimmed from password");
+  }
+  if (overridden.length > 0) {
+    console.log(
+      `\n  note: ${envFile} took precedence over stale shell variable(s): ` +
+        `${overridden.join(", ")}.\n` +
+        "  Those shell values were ignored (this file was requested explicitly)."
+    );
+  }
+  if (shellStillWinning.length > 0) {
+    console.log(
+      `\n  WARNING: shell variable(s) ${shellStillWinning.join(", ")} override ` +
+        `${envFile}.\n` +
+        "  Editing that file will NOT change these values. Clear them with:\n" +
+        `    PowerShell:  ${shellStillWinning
+          .map((k) => `Remove-Item Env:\\${k}`)
+          .join("; ")}\n` +
+        "  ...or just open a new terminal."
+    );
+  }
+  if (isAura && PASSWORD.length !== 43) {
+    console.log(
+      `\n  NOTE: Aura passwords are 43 characters; this one is ${PASSWORD.length}. ` +
+        "Likely\n  truncated or over-copied — re-copy it from Aura's credentials file."
+    );
   }
   // The exact trap that produces a confusing auth failure.
   if (isAura && passwordSource !== uriSource) {
@@ -132,6 +182,12 @@ function explainFailure(err: unknown): void {
       "  4. Put NEO4J_URI, NEO4J_USER and NEO4J_PASSWORD together in .env.aura,"
     );
     console.error("     then run: npm run seed:aura");
+    if (shellStillWinning.length > 0) {
+      console.error(
+        `  5. Stale shell variable(s) are in force: ${shellStillWinning.join(", ")}.` +
+          "\n     Clear them (see the warning above) or open a new terminal."
+      );
+    }
     return;
   }
 
